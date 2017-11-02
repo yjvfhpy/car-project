@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:tx="http://www.springframework.org/schema/tx" xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+           http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-3.0.xsd
+           http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-3.0.xsd
+           http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd
+           http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task-3.0.xsd
+           http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-3.0.xsd"
+	default-autowire="byName" default-lazy-init="false">
+
+	<!-- 配置注解扫描的包路径 -->
+	<context:component-scan base-package="com.saturn.service"></context:component-scan>
+	<context:component-scan base-package="com.saturn.hibernate.dao"></context:component-scan>
+	<context:component-scan base-package="com.saturn.hibernate.aspect"></context:component-scan>
+	
+	<bean class="org.springframework.web.servlet.mvc.annotation.DefaultAnnotationHandlerMapping"></bean>
+	
+	<!-- Spring自动扫描被@Aspect标注的切面 -->
+	<aop:aspectj-autoproxy />
+	
+	
+	<bean id="abstractDataSource" abstract="true" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+		<property name="initialSize" value="0" />
+		<property name="maxActive" value="20" />
+		<property name="maxIdle" value="20" />
+		<property name="minIdle" value="5" />
+		<property name="maxWait" value="60000" />
+		<property name="validationQuery" value="${validationQuery.sqlserver}" />
+		<property name="testOnBorrow" value="false" />
+		<property name="testOnReturn" value="false" />
+		<property name="testWhileIdle" value="true" />
+		<property name="timeBetweenEvictionRunsMillis" value="60000" />
+		<property name="minEvictableIdleTimeMillis" value="25200000" />
+		<property name="removeAbandoned" value="true" />
+		<property name="removeAbandonedTimeout" value="18000" />
+		<property name="logAbandoned" value="true" />
+		<property name="filters" value="stat" />
+		<property name="connectProperties">
+			<props>
+				<prop key="remarksReporting">true</prop>
+			</props>
+		</property>
+	</bean>
+	
+	
+	<!-- 读数据源 -->
+	<bean name="dataSource_read" parent="abstractDataSource">
+		<property name="url" value="${jdbc.url.read}" />
+		<property name="username" value="${jdbc.username.read}" />
+		<property name="password" value="${jdbc.password.read}" />
+	</bean>
+	
+	<!-- 写数据源 -->
+	<bean name="dataSource_write" parent="abstractDataSource">
+		<property name="url" value="${jdbc.url.write}" />
+		<property name="username" value="${jdbc.username.write}" />
+		<property name="password" value="${jdbc.password.write}" />
+	</bean>
+	
+	
+	
+    <!-- 数据源集合 -->
+	<bean id="dataSource" class="com.saturn.hibernate.datasource.DynamicDataSource">
+		<property name="targetDataSources">
+			<map key-type="com.saturn.hibernate.datasource.DataSourceType">
+				<entry key="dataSource_read" value-ref="dataSource_read" />
+			    <entry key="dataSource_write" value-ref="dataSource_write" />
+			</map>
+		</property>
+		<property name="defaultTargetDataSource" ref="dataSource_read" />
+	</bean>
+	
+	<bean id="sessionFactory" class="org.springframework.orm.hibernate4.LocalSessionFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+		<!-- hibernate拦截器 -->
+		<property name="hibernateProperties">
+			<props>
+				<prop key="hibernate.dialect">${hibernate.dialect}</prop>
+				<prop key="hibernate.hbm2ddl.auto">${hibernate.hbm2ddl.auto}</prop>
+				<prop key="hibernate.show_sql">true</prop>
+				<prop key="hibernate.format_sql">true</prop>
+				<prop key="hibernate.temp.use_jdbc_metadata_defaults">false</prop>
+
+				<!-- 开启查询缓存 -->
+				<prop key="hibernate.cache.use_query_cache">true</prop>
+				<!-- 开启二级缓存 -->
+				<prop key="hibernate.cache.use_second_level_cache">true</prop>
+				<!-- 由于spring也使用了Ehcache, 保证双方都使用同一个缓存管理器 -->
+				<prop key="hibernate.cache.region.factory_class">org.hibernate.cache.ehcache.SingletonEhCacheRegionFactory
+				</prop>
+				<!-- Hibernate将收集有助于性能调节的统计数据 -->
+				<prop key="hibernate.generate_statistics">true</prop>
+			</props>
+		</property>
+		<!-- 注解方式配置 -->
+		<property name="packagesToScan">
+			<list>
+				<value>com.saturn.entity</value>
+			</list>
+		</property>
+	</bean>
+	
+	<!-- cacheManager -->
+	<bean id="cacheManagerEhcache" class="org.springframework.cache.ehcache.EhCacheManagerFactoryBean">
+		<property name="configLocation">
+			<value>classpath:ehcache.xml</value>
+		</property>
+		<!-- 由于hibernate也使用了Ehcache, 保证双方都使用同一个缓存管理器 -->
+		<property name="shared" value="true" />
+	</bean>
+
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource">
+			<ref bean="dataSource" />
+		</property>
+	</bean>
+
+	<bean id="namedParameterJdbcTemplate" class="org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate">
+		<constructor-arg ref="dataSource" />
+	</bean>
+
+	<!-- 配置事物管理器，在*ServiceImpl里写@Transactional就可以启用事物管理 -->
+	<bean name="transactionManager" class="org.springframework.orm.hibernate4.HibernateTransactionManager">
+		<property name="sessionFactory" ref="sessionFactory"></property>
+	</bean>
+
+	<!--启动注解@Transactional用注解来管理事务 -->
+	<tx:annotation-driven transaction-manager="transactionManager" />
+
+	<!-- JSR303 Validator定义 -->
+	<bean id="validator" class="org.springframework.validation.beanvalidation.LocalValidatorFactoryBean" />
+</beans>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:dubbo="http://code.alibabatech.com/schema/dubbo"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans  
+					  http://www.springframework.org/schema/beans/spring-beans-4.1.xsd  
+					  http://www.springframework.org/schema/context  
+					  http://www.springframework.org/schema/context/spring-context-4.1.xsd
+					  http://code.alibabatech.com/schema/dubbo
+        			  http://code.alibabatech.com/schema/dubbo/dubbo.xsd
+					  ">
+	
+	<!-- 引入属性配置文件 -->
+	<bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		<property name="locations">
+			<list>
+				<value>classpath:cardb.properties</value>
+				<value>classpath:dubbo.properties</value>
+			</list>
+		</property>
+	</bean>
+
+	<import resource="hibernate.xml"/>
+
+	<!-- 如果公共配置很简单，没有多注册中心，多协议等情况，或者想多个Spring容器想共享配置，可以使用dubbo.properties作为缺省配置。 -->
+	<!-- Dubbo将自动加载classpath根目录下的dubbo.properties，可以通过JVM启动参数：-Ddubbo.properties.file=xxx.properties 改变缺省配置位置。 -->
+	<!-- 如果classpath根目录下存在多个dubbo.properties，比如多个jar包中有dubbo.properties，Dubbo会任意加载，并打印Error日志，后续可能改为抛异常。 -->
+
+	<!-- 
+	<dubbo:application name="${dubbo.application.name}"/> 
+	<dubbo:registry protocol="${dubbo.registry.protocol}" address="${dubbo.zookeeper.address}" /> 
+	<dubbo:protocol name="${dubbo.protocol.name}" port="-1" /> 
+	-->
+	
+	
+	
+	
+	
+	
+	<!--负载均衡策略，可选值：random,roundrobin,leastactive，分别表示：随机，轮循，最少活跃调用.缺省为random随机调 -->
+	<dubbo:service interface="com.saturn.api.IUinfoService" ref="uinfoService" loadbalance="roundrobin"/>
+	
+	<dubbo:service interface="com.saturn.api.ICacheService" ref="cacheService" />
+	
+	<dubbo:service interface="com.saturn.api.ICallbackService" ref="callbackService" connections="1" callbacks="1000">
+		<dubbo:method name="addListener">
+			<!--index标识方法名，从0开始。callback 参数是否为callback接口，如果为callback，服务提供方将生成反向代理，可以从服务提供方反向调用消费方，通常用于事件推送. -->
+			<dubbo:argument index="1" callback="true" />
+			<!-- 通过参数类型查找参数的index 与index二选一 -->
+			<!--<dubbo:argument type="com.demo.CallbackListener" callback="true" />-->
+		</dubbo:method>
+	</dubbo:service>
+	
+	<dubbo:service interface="com.saturn.api.IUserService" ref="userService"/>
+	
+	<dubbo:service interface="com.saturn.api.IGenericService" ref="genericService" />
+	
+	<dubbo:service interface="com.saturn.api.IDynamicDataSourceService" ref="dynamicDataSourceService" />
+	
+</beans>
